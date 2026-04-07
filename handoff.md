@@ -1,0 +1,132 @@
+# ax-eval 핸드오프
+
+> AI 소비: 다음 세션 시작 시 이 파일을 먼저 읽을 것.
+
+## 프로젝트 상태
+
+| 항목 | 내용 |
+|------|------|
+| 버전 | v1.2.0 |
+| 상태 | 미게시 (로컬 개발 완료, git 미초기화) |
+| 다음 단계 | git init → GitHub 리포 생성 → 플러그인 마켓플레이스 등록 |
+
+## 프로젝트 개요
+
+사업관리본부 직원의 Claude Code AI 활용 수준(AX 레벨)을 측정·추적하는 Claude Code 플러그인.
+
+- **평가 체계**: 4축(요청력/검증력/활용력/판단력) × 5레벨(⭐~⭐⭐⭐⭐⭐) × 4역할
+- **명령어**: `/ax-eval 시작` / `체크` / `팁` (3개 고정)
+- **아키텍처**: 순수 마크다운 플러그인 + Python 변환 스크립트 1개
+
+## 파일 구조
+
+```
+ax-eval/
+├── CLAUDE.md                          ← 플러그인 개발 컨텍스트 (이 세션 작성)
+├── handoff.md                         ← 이 파일
+├── README.md
+├── .claude/settings.local.json        ← compact SessionStart 훅 포함
+├── .claude-plugin/plugin.json         ← 플러그인 매니페스트
+├── commands/ax-eval.md                ← 커맨드 라우터 (시작|체크|팁)
+├── agents/ax-analyst.md               ← 4축 스코어링 서브에이전트
+├── skills/
+│   ├── ax-eval-onboard/SKILL.md      ← 초기 설정 플로우
+│   ├── ax-eval-check/SKILL.md        ← 레벨 체크 + 출력 형식
+│   └── ax-eval-tip/SKILL.md          ← 레벨별 맞춤 팁
+├── scripts/convert_sessions.py        ← JSONL→MD 변환 (vibe-sunsang 기반, AX 지표 추가)
+└── references/
+    ├── ax-maturity-model.md           ← 4축 × 5레벨 정의 + 역할별 가중치
+    ├── antipatterns.md                ← 역할별 흔한 실수와 개선법
+    ├── prompt-templates.md            ← 업무별 프롬프트 템플릿
+    └── tips-by-level.md               ← 레벨별 성장 행동 지침
+```
+
+## 핵심 설계 결정
+
+| 결정 | 내용 | 이유 |
+|------|------|------|
+| Claude Code 전용 | 외부 도구(ChatGPT 등) 분석 제외 | 단순화 요청, JSONL 자동분석만 |
+| 4축으로 축소 | vibe-sunsang 6축 → 4축 | 비개발자 이해도 우선 |
+| 5레벨 별점 | 7단계 숫자 → ⭐~⭐⭐⭐⭐⭐ | 비개발자 직관성 |
+| 3명령어 원칙 | 시작/체크/팁만 | 사용자 인지 부하 최소화 |
+| 순수 마크다운 | 코드는 convert_sessions.py만 | vibe-sunsang 패턴 준수 |
+
+## 스코어링 로직 (ax-analyst.md 참조)
+
+### 지표 추출 (convert_sessions.py)
+- `avg_user_msg_len` + `specific_context_ratio` → 요청력
+- `verify_ratio` → 검증력
+- `tool_diversity` + `orch_tool_count` → 활용력
+- `strat_ratio` + `thinking_turn_ratio` → 판단력
+
+### 레벨 판정
+- 각 축 1~5점 → 역할별 가중 평균 → ⭐(1.0~1.7) ~ ⭐⭐⭐⭐⭐(4.2~5.0)
+- 세션 3개 이상 시 최소 ⭐⭐ 보장
+
+### 역할별 가중치
+| 역할 | 요청력 | 검증력 | 활용력 | 판단력 |
+|------|--------|--------|--------|--------|
+| 문서 작성 | 35% | 30% | 15% | 20% |
+| 데이터 분석 | 25% | 35% | 20% | 20% |
+| 소통 조율 | 35% | 25% | 15% | 25% |
+| 업무 자동화 | 25% | 25% | 35% | 15% |
+
+## 사용자 데이터 경로
+
+```
+~/ax-eval/
+├── config/profile.json           ← 역할, 생성일
+├── config/project_names.json     ← CC 프로젝트 이름 매핑
+├── conversations/                ← 변환된 대화 로그 (convert_sessions.py 출력)
+├── assessments/                  ← assessment-YYYY-MM-DD.json
+├── exports/                      ← growth-report-*.md
+└── growth-log/
+    ├── TIMELINE.md
+    └── weekly/
+```
+
+## 변경 이력
+
+| 날짜 | 버전 | 내용 |
+|------|------|------|
+| 2026-04-07 | v1.2.0 | 하네스 엔지니어링 — ax-analyst 자기검증 체크리스트, 행동 앵커, 엣지케이스 규칙, 중앙값 집계, 구조 점검 버그 4건 수정 |
+| 2026-04-07 | v1.1.0 | Auto-Nudge — SessionStart/Stop 훅으로 약한 축 자동 피드백 추가 |
+| 2026-04-07 | v1.0.1 | CLAUDE.md 개선 — /init 헤더, 개발 명령어, 실행 흐름 다이어그램 추가 |
+| 2026-04-06 | v1.0.0 | 초기 구현 — 전체 플러그인 구조 생성 |
+
+## 자동 피드백 시스템 (Auto-Nudge) — v1.1.0 추가
+
+### 파일
+
+| 파일 | 역할 |
+|------|------|
+| `~/.claude/scripts/ax-nudge.sh` | SessionStart 훅 — 약한 축 자동 피드백 (주 1회) |
+| `~/.claude/scripts/ax-eval-log-sync.sh` | Stop 훅 — 세션 종료 시 JSONL→MD 자동 변환 |
+| `~/.claude/settings.json` | 글로벌 훅 2개 추가 |
+
+### 동작 로직
+
+- **세션 시작 시**: `~/ax-eval/assessments/` 최신 파일에서 약한 축 추출 → `systemMessage`로 Claude 컨텍스트 주입
+- **쿨다운**: `~/ax-eval/.nudge-stamp` 파일로 7일 제어 (stamp 삭제 시 즉시 재표시)
+- **staleness**: assessment가 14일 이상 지났으면 `/ax-eval 체크` 권유 문구 자동 추가
+- **세션 종료 시**: `convert_sessions.py` 백그라운드 실행으로 최신 로그 변환
+
+### 검증 완료
+
+| 케이스 | 결과 |
+|--------|------|
+| 정상 피드백 | systemMessage JSON 출력 확인 |
+| 7일 쿨다운 | 출력 없음 (정상) |
+| 14일+ 경과 | 체크 권유 문구 추가 확인 |
+| assessment 없음 | 조용히 종료 확인 |
+
+---
+
+## 다음 세션 TODO (우선순위 순)
+
+1. [ ] **git init + .gitignore + 첫 커밋** ← 최우선 (작업물 유실 방지)
+2. [ ] **E2E 실테스트**: `/ax-eval 시작` → `체크` → `팁` 전체 플로우
+3. [ ] ax-eval-log-sync.sh Stop 훅 실환경 검증
+4. [ ] GitHub 리포 생성 + push
+5. [ ] gptaku-plugins 마켓플레이스 등록 절차 확인
+6. [ ] 로컬 플러그인 설치 테스트 (`claude plugins install . --local`)

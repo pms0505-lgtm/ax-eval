@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//c/Users/DG-2501-PN-001/.claude/plugins/**)",
+      "Read(//c/Users/DG-2501-PN-001/AppData/Local/Claude/**)",
+      "Bash(\"/c/Users/DG-2501-PN-001/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe/jq.exe\" --version)",
+      "Bash(bash:*)",
+      "Bash(python -m py_compile /c/Users/DG-2501-PN-001/Desktop/ax_eval/scripts/convert_sessions.py)",
+      "Skill(handoff)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"ax-eval 플러그인 개발 컨텍스트: 사업관리본부 비개발자 대상 Claude Code AX 레벨 평가 플러그인. 평가체계=4축(요청력/검증력/활용력/판단력)×5레벨(⭐~⭐⭐⭐⭐⭐)×4역할. 명령어=시작/체크/팁 3개만. 핵심 파일: commands/ax-eval.md(라우터), agents/ax-analyst.md(스코어링), skills/ax-eval-*/SKILL.md, scripts/convert_sessions.py(JSONL변환). 사용자 데이터: ~/ax-eval/config+conversations+assessments+growth-log. 순수 마크다운 플러그인, 코드는 convert_sessions.py만 존재.\"'",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

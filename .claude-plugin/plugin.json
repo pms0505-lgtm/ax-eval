@@ -1,0 +1,27 @@
+{
+  "name": "ax-eval",
+  "version": "1.1.0",
+  "description": "사업관리본부 AI 전환(AX) 레벨 평가 에이전트. Claude Code 사용 로그를 자동 분석하여 4축(요청력/검증력/활용력/판단력) × 5단계 레벨 평가, 성장 추적, 맞춤 활용 팁 제공.",
+  "author": {
+    "name": "DG Business Management"
+  },
+  "keywords": ["ax", "ai-transformation", "evaluation", "business", "growth", "coaching", "korean"],
+  "commands": [
+    {
+      "name": "ax-eval",
+      "description": "AX 레벨 평가 — 시작/체크/팁"
+    }
+  ],
+  "skills": [
+    "skills/ax-eval-onboard",
+    "skills/ax-eval-check",
+    "skills/ax-eval-tip"
+  ],
+  "agents": [
+    "agents/ax-analyst.md"
+  ],
+  "scripts": [
+    "scripts/convert_sessions.py"
+  ],
+  "requiredPythonVersion": "3.8"
+}
