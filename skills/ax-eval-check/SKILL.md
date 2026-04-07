@@ -28,13 +28,7 @@ python3 {PLUGIN_SCRIPTS_DIR}/convert_sessions.py \
   --names-file ~/ax-eval/config/project_names.json
 ```
 
-`PLUGIN_SCRIPTS_DIR`는 플러그인 캐시 경로:
-`~/.claude/plugins/cache/*/ax-eval/*/scripts/`
-
-경로를 찾으려면:
-```bash
-find ~/.claude/plugins -name "convert_sessions.py" -path "*/ax-eval/*" 2>/dev/null | head -1
-```
+> `{PLUGIN_SCRIPTS_DIR}`는 플러그인 설치 경로의 scripts/ 디렉토리로 자동 해결됩니다.
 
 ### 2단계: ax-analyst 서브에이전트에 위임
 
@@ -71,13 +65,15 @@ Claude Code를 조금 더 사용하신 후 다시 체크해보세요!
 | 활용력 | {score} | {bar} |
 | 판단력 | {score} | {bar} |
 
-분석된 세션: {N}개
+분석된 세션: {N}개{DATA_NOTE}
 
 💡 가장 낮은 축: {WEAKEST_AXIS}
    → {WEAKEST_TIP}
 
 📈 성장하려면: /ax-eval 팁
 ```
+
+> `{DATA_NOTE}`: SESSIONS_ANALYZED가 3~5이면 ` (데이터 부족, 정확도가 낮을 수 있음)` 추가. 6개 이상이면 빈 문자열.
 
 **정상 분석 시 (재평가 — 레벨 유지 또는 상승):**
 ```
@@ -92,7 +88,7 @@ Claude Code를 조금 더 사용하신 후 다시 체크해보세요!
 | 활용력 | {prev} | {score} | {delta} {방향} | {bar} |
 | 판단력 | {prev} | {score} | {delta} {방향} | {bar} |
 
-분석된 세션: {N}개
+분석된 세션: {N}개{DATA_NOTE}
 
 💡 가장 낮은 축: {WEAKEST_AXIS}
    → {WEAKEST_TIP}
@@ -113,7 +109,7 @@ Claude Code를 조금 더 사용하신 후 다시 체크해보세요!
 | 활용력 | {prev} | {score} | {delta} {방향} | {bar} |
 | 판단력 | {prev} | {score} | {delta} {방향} | {bar} |
 
-분석된 세션: {N}개
+분석된 세션: {N}개{DATA_NOTE}
 
 📉 이번 주 사용량이 적거나 업무 유형이 바뀌면 점수가 내려갈 수 있어요.
    일시적인 변화이니 너무 걱정하지 마세요.
@@ -126,12 +122,16 @@ Claude Code를 조금 더 사용하신 후 다시 체크해보세요!
 
 ### 출력 형식 규칙
 
+**`{DATA_NOTE}` 규칙:**
+- SESSIONS_ANALYZED 3~5: ` (데이터 부족, 정확도가 낮을 수 있음)` 출력
+- SESSIONS_ANALYZED 6 이상: 빈 문자열 (출력 없음)
+
 **별점 표시:**
-- ⭐ 입문 (1.0~1.7)
-- ⭐⭐ 활용 (1.8~2.5)
-- ⭐⭐⭐ 협업 (2.6~3.3)
-- ⭐⭐⭐⭐ 주도 (3.4~4.1)
-- ⭐⭐⭐⭐⭐ 전략 (4.2~5.0)
+- ⭐ 입문 (1.0 이상 1.8 미만)
+- ⭐⭐ 활용 (1.8 이상 2.6 미만)
+- ⭐⭐⭐ 협업 (2.6 이상 3.4 미만)
+- ⭐⭐⭐⭐ 주도 (3.4 이상 4.2 미만)
+- ⭐⭐⭐⭐⭐ 전략 (4.2 이상 5.0 이하)
 
 **점수 바:**
 - 1.0~1.9: `▓░░░░`

@@ -18,17 +18,43 @@ DEFAULT_OUTPUT_DIR = Path.home() / "ax-eval" / "conversations"
 DEFAULT_NAMES_FILE = Path.home() / "ax-eval" / "config" / "project_names.json"
 
 # 검증 키워드: 사용자가 AI 결과를 검토하는 패턴
+# 주의: "확인", "다시", "수정" 등 단독 사용은 오탐률이 높아 서술어 결합형으로 교체
 VERIFY_KEYWORDS = [
-    "확인", "검토", "맞아", "맞나요", "맞는지", "틀렸", "틀린",
-    "다시", "수정", "고쳐", "바꿔", "잘못", "아니야", "아닌데",
-    "왜", "이게 맞아", "검증", "체크"
+    "확인해", "확인해줘", "확인해봐",  # "확인" 단독 제거 → 서술어 결합형
+    "검토해", "검토해줘", "검토해봐",
+    "맞아", "맞나요", "맞는지", "맞지",
+    "틀렸", "틀린 거", "잘못됐", "잘못된",
+    "다시 확인", "재검토",             # "다시" 단독 제거 → 복합어만
+    "고쳐", "바꿔", "아니야", "아닌데",
+    "이게 맞아", "검증", "체크",
+    "누락", "정확한지", "빠진",
 ]
 
-# 전략 키워드: 메타인지, 비교, 대안 사고
+# 전략 키워드: 메타인지, 비교, 대안 사고 (2-gram으로 "왜" 오탐 방지)
 STRAT_KEYWORDS = [
-    "왜", "이유", "대안", "비교", "차이", "장단점", "어떤 게 나",
-    "더 좋은", "효율", "전략", "계획", "방향", "목적", "목표"
+    "왜 이", "왜 그", "왜 이렇게", "이유는", "이유가", "대안", "비교", "차이",
+    "장단점", "어떤 게 나", "더 좋은", "효율", "전략", "계획", "방향", "목적", "목표"
 ]
+
+# 대안 탐색 키워드: 판단력 보조 지표
+ALT_KEYWORDS = [
+    "대안", "비교", "차이", "장단점", "어떤 게 나", "더 좋은",
+    "다른 방법", "다른 방식", "대신", "또 다른"
+]
+
+# 수정 요청 키워드: 검증력 보조 지표
+CORRECTION_KEYWORDS = [
+    "수정해", "고쳐줘", "바꿔줘", "다시 해줘", "다시 작성", "틀렸어", "잘못됐어"
+]
+
+# 출력 형식 지정 키워드: 요청력 보조 지표
+FORMAT_KEYWORDS = [
+    "표로", "목록으로", "표 형태", "번호로", "불릿", "형식으로", "형태로",
+    "정리해줘", "요약해줘", "마크다운"
+]
+
+# 후속 질문 키워드: 검증력/판단력 보조 지표
+FOLLOW_UP_KEYWORDS = ["그럼", "그러면", "근데", "추가로", "그리고", "그 다음"]
 
 # Tool formatters
 TOOL_FORMATTERS = {
@@ -140,14 +166,25 @@ def count_keywords(text: str, keywords: list) -> int:
 
 
 def has_context_specificity(text: str) -> bool:
-    """파일명, 숫자, 구체적 명사 포함 여부 (맥락 구체성)"""
-    # 파일 경로 패턴
-    has_path = bool(re.search(r'[\w\-]+\.\w{2,5}', text))
-    # 숫자 포함 (날짜, 금액, 비율 등)
-    has_number = bool(re.search(r'\d+', text))
+    """파일명, 업무 단위 숫자, 구체적 명사 포함 여부 (맥락 구체성)
+
+    오탐 방지 원칙:
+    - 파일 경로: 실제 파일 확장자만 (e.g., a.m. 같은 약어 제외)
+    - 숫자: 업무 단위 동반 시만 (%, 원, 개, 명 등) 또는 연도/3자리 이상
+    - 따옴표: 구체적 용어 명시로 간주
+    """
+    _FILE_EXT = r'(?:py|js|ts|jsx|tsx|md|json|csv|xlsx|xls|txt|pdf|png|jpg|jpeg|html|css|yaml|yml|sql|sh)'
+    # 실제 파일명 패턴 (알려진 확장자만)
+    has_path = bool(re.search(rf'\b[\w\-]+\.{_FILE_EXT}\b', text, re.IGNORECASE))
+    # 경로 구분자 포함 (src/components, ~/Desktop 등)
+    has_path_sep = bool(re.search(r'[\w\-]+/[\w\.\-]+', text))
+    # 업무 단위가 붙은 숫자 (50%, 3억원, 20명, 4분기, 2026년 등)
+    has_meaningful_number = bool(re.search(
+        r'\d+\s*[%％원개명건억만천]\b|\d{4}년|\d{1,2}월|\d+분기|\b\d{3,}\b', text
+    ))
     # 따옴표로 감싼 구체적 용어
-    has_quoted = bool(re.search(r'["\'「」]', text))
-    return has_path or (has_number and len(text) > 50) or has_quoted
+    has_quoted = bool(re.search(r'["\'「」『』]', text))
+    return has_path or has_path_sep or has_meaningful_number or has_quoted
 
 
 def convert_session(jsonl_path: Path, verbose: bool = False) -> dict:
@@ -178,10 +215,21 @@ def convert_session(jsonl_path: Path, verbose: bool = False) -> dict:
     thinking_turn_count = 0
 
     # AX 추가 카운터
-    verify_keyword_count = 0    # 검증 키워드 합산 (검증력)
-    strat_keyword_count = 0     # 전략 키워드 합산 (판단력)
+    verify_turn_count = 0       # 검증 키워드 포함 턴 수 (검증력) — per-turn presence
+    strat_turn_count = 0        # 전략 키워드 포함 턴 수 (판단력) — per-turn presence
     specific_context_count = 0  # 맥락 구체성 (요청력)
+    structure_count = 0         # 구조화된 요청 (요청력 보조)
+    alt_keyword_count = 0       # 대안 탐색 키워드 (판단력 보조)
+    correction_count = 0        # 수정 요청 턴 (검증력 보조)
+    format_count = 0            # 출력 형식 지정 턴 (요청력 보조)
+    follow_up_count = 0         # 후속 질문 턴 (검증력/판단력 보조)
     user_msgs_raw = []          # 원본 사용자 메시지 (분석용)
+
+    # 하네스 엔지니어링 카운터
+    claude_md_access_count = 0  # CLAUDE.md 접근 여부
+    rules_access_count = 0      # .claude/rules 파일 접근 여부
+    memory_access_count = 0     # memory 파일 접근 여부
+    slash_cmd_count = 0         # 슬래시 커맨드 사용 횟수
 
     with open(jsonl_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -234,13 +282,35 @@ def convert_session(jsonl_path: Path, verbose: bool = False) -> dict:
                     user_msg_lengths.append(len(content))
                     user_msgs_raw.append(content)
 
-                    # AX 지표: 검증력 키워드
-                    verify_keyword_count += count_keywords(content, VERIFY_KEYWORDS)
-                    # AX 지표: 판단력 키워드
-                    strat_keyword_count += count_keywords(content, STRAT_KEYWORDS)
+                    # AX 지표: 검증력 키워드 (per-turn presence)
+                    if count_keywords(content, VERIFY_KEYWORDS) > 0:
+                        verify_turn_count += 1
+                    # AX 지표: 판단력 키워드 (per-turn presence)
+                    if count_keywords(content, STRAT_KEYWORDS) > 0:
+                        strat_turn_count += 1
                     # AX 지표: 맥락 구체성
                     if has_context_specificity(content):
                         specific_context_count += 1
+                    # AX 지표: 구조화된 요청
+                    if (re.search(r'^\s*\d+\.\s', content, re.MULTILINE) or
+                            re.search(r'\[.{1,10}\]', content) or
+                            re.search(r'^#{1,3}\s', content, re.MULTILINE)):
+                        structure_count += 1
+                    # AX 지표: 대안 탐색
+                    if count_keywords(content, ALT_KEYWORDS) > 0:
+                        alt_keyword_count += 1
+                    # AX 지표: 수정 요청
+                    if count_keywords(content, CORRECTION_KEYWORDS) > 0:
+                        correction_count += 1
+                    # AX 지표: 출력 형식 지정
+                    if count_keywords(content, FORMAT_KEYWORDS) > 0:
+                        format_count += 1
+                    # AX 지표: 후속 질문 (짧은 메시지 + 후속 키워드)
+                    if len(content) < 80 and count_keywords(content, FOLLOW_UP_KEYWORDS) > 0:
+                        follow_up_count += 1
+                    # 하네스: 슬래시 커맨드 사용
+                    if content.strip().startswith("/"):
+                        slash_cmd_count += 1
 
                 elif isinstance(content, list):
                     for item in content:
@@ -256,6 +326,19 @@ def convert_session(jsonl_path: Path, verbose: bool = False) -> dict:
                             tool_name = block.get("name", "")
                             if tool_name in ORCH_TOOLS:
                                 orch_tool_count += 1
+                            # 하네스 엔지니어링 신호 감지
+                            tool_input = block.get("input") or {}
+                            if isinstance(tool_input, dict):
+                                file_path = tool_input.get("file_path", "") or ""
+                                bash_cmd = tool_input.get("command", "") or ""
+                                path_or_cmd = file_path + " " + bash_cmd
+                                if "CLAUDE.md" in path_or_cmd:
+                                    claude_md_access_count += 1
+                                if ".claude/rules" in path_or_cmd or "/rules/" in path_or_cmd:
+                                    rules_access_count += 1
+                                if ("MEMORY.md" in path_or_cmd or
+                                        "memory/" in path_or_cmd.lower()):
+                                    memory_access_count += 1
                         if block.get("type") == "thinking":
                             has_thinking = True
                 if has_thinking:
@@ -299,16 +382,45 @@ def convert_session(jsonl_path: Path, verbose: bool = False) -> dict:
 
     # AX 전용 지표
     metadata["tool_diversity"] = len(metadata["tools_used"])
-    metadata["verify_keyword_count"] = verify_keyword_count
-    metadata["strat_keyword_count"] = strat_keyword_count
+    metadata["verify_turn_count"] = verify_turn_count
+    metadata["strat_turn_count"] = strat_turn_count
     metadata["specific_context_ratio"] = (
         round(specific_context_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
     )
     metadata["verify_ratio"] = (
-        round(verify_keyword_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+        round(verify_turn_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
     )
     metadata["strat_ratio"] = (
-        round(strat_keyword_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+        round(strat_turn_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+    metadata["structure_ratio"] = (
+        round(structure_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+    metadata["alt_request_ratio"] = (
+        round(alt_keyword_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+    metadata["correction_ratio"] = (
+        round(correction_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+    metadata["output_format_spec_ratio"] = (
+        round(format_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+    metadata["follow_up_ratio"] = (
+        round(follow_up_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+
+    # 하네스 엔지니어링 지표
+    metadata["claude_md_access"] = 1 if claude_md_access_count > 0 else 0
+    metadata["rules_used"] = 1 if rules_access_count > 0 else 0
+    metadata["memory_used"] = 1 if memory_access_count > 0 else 0
+    metadata["slash_cmd_ratio"] = (
+        round(slash_cmd_count / user_turn_count, 2) if user_turn_count > 0 else 0.0
+    )
+    metadata["harness_count"] = (
+        metadata["claude_md_access"]
+        + metadata["rules_used"]
+        + metadata["memory_used"]
+        + (1 if metadata["slash_cmd_ratio"] > 0.05 else 0)
     )
 
     return {"messages": messages, "metadata": metadata}
@@ -370,6 +482,16 @@ def session_to_markdown(session_data: dict, project_name: str) -> str:
     lines.append(f"has_orchestration: {str(meta['has_orchestration']).lower()}")
     lines.append(f"tool_error_count: {meta['tool_error_count']}")
     lines.append(f"thinking_turn_ratio: {meta['thinking_turn_ratio']}")
+    lines.append(f"structure_ratio: {meta['structure_ratio']}")
+    lines.append(f"alt_request_ratio: {meta['alt_request_ratio']}")
+    lines.append(f"correction_ratio: {meta['correction_ratio']}")
+    lines.append(f"output_format_spec_ratio: {meta['output_format_spec_ratio']}")
+    lines.append(f"follow_up_ratio: {meta['follow_up_ratio']}")
+    lines.append(f"claude_md_access: {meta['claude_md_access']}")
+    lines.append(f"rules_used: {meta['rules_used']}")
+    lines.append(f"memory_used: {meta['memory_used']}")
+    lines.append(f"slash_cmd_ratio: {meta['slash_cmd_ratio']}")
+    lines.append(f"harness_count: {meta['harness_count']}")
     lines.append("---")
     lines.append("")
 

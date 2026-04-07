@@ -47,6 +47,16 @@ allowed-tools:
 | `orch_tool_count` | 오케스트레이션 도구 사용 횟수 |
 | `tool_error_count` | 도구 오류 발생 횟수 |
 | `user_turn_count` | 사용자 발화 횟수 |
+| `structure_ratio` | 구조화된 요청 비율 |
+| `alt_request_ratio` | 대안/비교 탐색 비율 |
+| `correction_ratio` | 수정 요청 비율 |
+| `output_format_spec_ratio` | 출력 형식 명시 비율 |
+| `follow_up_ratio` | 후속 질문 비율 |
+| `claude_md_access` | CLAUDE.md 접근 여부 (0/1) |
+| `rules_used` | .claude/rules 파일 사용 여부 (0/1) |
+| `memory_used` | memory 파일 사용 여부 (0/1) |
+| `slash_cmd_ratio` | 슬래시 커맨드 사용 비율 |
+| `harness_count` | 하네스 엔지니어링 신호 합계 (0~4) |
 
 ### 3. 집계 방식
 
@@ -58,47 +68,62 @@ allowed-tools:
 
 각 세션의 지표로 점수를 산출합니다. 각 점수 옆 "이런 사람"은 합리성 판단 기준입니다.
 
-#### 요청력 점수 (avg_user_msg_len + specific_context_ratio)
+#### 요청력 점수 (avg_user_msg_len + specific_context_ratio + structure_ratio + output_format_spec_ratio)
 
-| 점수 | 조건 | 이런 사람 |
-|------|------|----------|
-| 1 | avg_len < 80 AND specific_ratio < 0.2 | "해줘", "정리해줘"만 말함 |
-| 2 | avg_len 80~200 OR specific_ratio 0.2~0.4 | 기본 배경은 있으나 두루뭉술 |
-| 3 | avg_len 200~400 AND specific_ratio > 0.3 | "나는 예산팀이고, 3월 집행현황을 표로..." |
-| 4 | avg_len 400~700 AND specific_ratio > 0.5 | 배경·형식·목적을 명확히 전달 |
-| 5 | avg_len > 700 AND specific_ratio > 0.7 | 배경+제약조건+형식+검증기준을 한번에 전달 |
+복합 공식: `요청력_raw = min(avg_len/200, 1.0) * 0.2 + specific_ratio * 0.5 + structure_ratio * 0.3`
 
-#### 검증력 점수 (verify_ratio)
+> avg_len 기준점: 한국어 비개발자 기준 200자면 배경+요청+형식을 충분히 담을 수 있음 (기존 400 → 200 하향)
+> specific_ratio 가중치 상향(0.4→0.5): 길이보다 맥락 구체성이 요청 품질과 더 높은 상관
 
-| 점수 | 조건 | 이런 사람 |
-|------|------|----------|
-| 1 | verify_ratio < 0.05 | AI 결과를 그대로 복붙 |
-| 2 | verify_ratio 0.05~0.1 | 가끔 "맞아?" 물어봄 |
-| 3 | verify_ratio 0.1~0.2 | 결과 받으면 한 번씩 확인 요청 |
-| 4 | verify_ratio 0.2~0.35 | 수치·논리 검토 후 수정 요청이 습관 |
-| 5 | verify_ratio > 0.35 | 대안 비교, 비판적 검토까지 체계적으로 |
+출력 형식 보너스: `output_format_spec_ratio > 0.3`이면 +0.1점 (최대 5점)
 
-#### 활용력 점수 (tool_diversity + orch_tool_count)
+| 점수 | 요청력_raw | 이런 사람 |
+|------|-----------|----------|
+| 1 | < 0.15 | "해줘", "정리해줘"만 말함 |
+| 2 | 0.15~0.30 | 기본 배경은 있으나 두루뭉술 |
+| 3 | 0.30~0.50 | 배경+요청 구조화 시작 |
+| 4 | 0.50~0.70 | 배경·형식·목적을 명확히 전달 |
+| 5 | > 0.70 | 구조화된 배경+제약조건+형식 전달 |
+
+#### 검증력 점수 (verify_ratio + correction_ratio + follow_up_ratio)
+
+세 지표 조합: `검증력_raw = verify_ratio * 0.5 + correction_ratio * 0.3 + follow_up_ratio * 0.2`
+
+| 점수 | 검증력_raw | 이런 사람 |
+|------|-----------|----------|
+| 1 | < 0.03 | AI 결과를 그대로 복붙 |
+| 2 | 0.03~0.07 | 가끔 "맞아?" 물어봄 |
+| 3 | 0.07~0.15 | 결과 받으면 한 번씩 확인 + 수정 요청 |
+| 4 | 0.15~0.25 | 수치·논리 검토 후 수정 요청이 습관 |
+| 5 | > 0.25 | 대안 비교, 비판적 검토까지 체계적으로 |
+
+#### 활용력 점수 (tool_diversity + orch_tool_count + harness_count)
 
 | 점수 | 조건 | 이런 사람 |
 |------|------|----------|
 | 1 | tool_diversity ≤ 1 | 대화만 함 |
 | 2 | tool_diversity 2~3 | 파일 읽기·쓰기 정도 활용 |
 | 3 | tool_diversity 4~5 | 검색·실행 등 다양한 기능 사용 |
-| 4 | tool_diversity 6~8 OR orch_tool_count > 0 | 여러 기능 조합, 서브에이전트 실험 |
-| 5 | tool_diversity > 8 OR orch_tool_count > 5 | 복잡한 오케스트레이션 능숙하게 활용 |
+| 4 | tool_diversity 4~6 AND (orch_tool_count > 0 OR tool_diversity >= 5 OR harness_count >= 2) | 여러 기능 조합, 환경 설계 시작 |
+| 5 | tool_diversity >= 5 AND (orch_tool_count >= 1 OR harness_count >= 3) | 오케스트레이션 또는 고급 환경 설계 능숙 |
 
-#### 판단력 점수 (strat_ratio + thinking_turn_ratio)
+**하네스 보너스**: 위 점수 산출 후 harness_count 기준으로 가산 (상한 5):
+- harness_count >= 1: +0.5점
+- harness_count >= 3: +1.0점 (0.5 대신 1.0 적용)
 
-두 지표를 가중 합산: `판단력_raw = strat_ratio * 0.6 + thinking_turn_ratio * 0.4`
+#### 판단력 점수 (strat_ratio + alt_request_ratio + thinking_turn_ratio + harness)
+
+세 지표를 가중 합산: `판단력_raw = strat_ratio * 0.6 + alt_request_ratio * 0.2 + thinking_turn_ratio * 0.2`
+
+**하네스 보너스**: (claude_md_access + rules_used) >= 1 이면 판단력 점수 +0.3 (상한 5)
 
 | 점수 | 판단력_raw | 이런 사람 |
 |------|-----------|----------|
-| 1 | < 0.05 | AI가 시키는 대로만 |
-| 2 | 0.05~0.1 | 가끔 "왜?" 질문 |
-| 3 | 0.1~0.2 | 대안·이유를 물어보는 편 |
-| 4 | 0.2~0.3 | 전략적으로 AI 활용 시점을 판단 |
-| 5 | > 0.3 | AI를 업무 의사결정 도구로 능숙하게 활용 |
+| 1 | < 0.04 | AI가 시키는 대로만 |
+| 2 | 0.04~0.08 | 가끔 "왜?" 질문 |
+| 3 | 0.08~0.16 | 대안·이유를 물어보는 편 |
+| 4 | 0.16~0.25 | 전략적으로 AI 활용 시점을 판단 |
+| 5 | > 0.25 | AI를 업무 의사결정 도구로 능숙하게 활용 |
 
 ### 4. 역할별 가중치 적용
 
@@ -106,10 +131,11 @@ allowed-tools:
 
 | 역할 | 요청력 | 검증력 | 활용력 | 판단력 |
 |------|--------|--------|--------|--------|
-| 문서 작성 | 35% | 30% | 15% | 20% |
-| 데이터 분석 | 25% | 35% | 20% | 20% |
-| 소통 조율 | 35% | 25% | 15% | 25% |
-| 업무 자동화 | 25% | 25% | 35% | 15% |
+| UA마케터 | 35% | 25% | 25% | 15% |
+| CRM마케터 | 30% | 30% | 15% | 25% |
+| 디자이너 | 40% | 20% | 25% | 15% |
+| 데이터분석가 | 20% | 35% | 25% | 20% |
+| 개발자 | 20% | 30% | 35% | 15% |
 | 미선택 (기본) | 25% | 25% | 25% | 25% |
 
 ### 5. 종합 레벨 판정
@@ -118,13 +144,13 @@ allowed-tools:
 
 | 종합 점수 | 레벨 | 이름 |
 |----------|------|------|
-| 1.0~1.7 | ⭐ | 입문 |
-| 1.8~2.5 | ⭐⭐ | 활용 |
-| 2.6~3.3 | ⭐⭐⭐ | 협업 |
-| 3.4~4.1 | ⭐⭐⭐⭐ | 주도 |
-| 4.2~5.0 | ⭐⭐⭐⭐⭐ | 전략 |
+| 1.0 이상 1.8 미만 | ⭐ | 입문 |
+| 1.8 이상 2.6 미만 | ⭐⭐ | 활용 |
+| 2.6 이상 3.4 미만 | ⭐⭐⭐ | 협업 |
+| 3.4 이상 4.2 미만 | ⭐⭐⭐⭐ | 주도 |
+| 4.2 이상 5.0 이하 | ⭐⭐⭐⭐⭐ | 전략 |
 
-**최소 보장**: 세션이 3개 이상이면 최소 ⭐⭐ (활용) 부여.
+**신뢰도 주석**: 세션 3~5개인 경우 계산된 점수를 그대로 반환하되, SESSIONS_ANALYZED 값을 통해 ax-eval-check가 `(데이터 부족, 정확도가 낮을 수 있음)` 주석을 출력. 최소 보장 없음 — 실제 점수 그대로 표시.
 
 ### 6. 이전 평가와 비교
 

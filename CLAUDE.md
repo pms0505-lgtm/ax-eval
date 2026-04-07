@@ -76,6 +76,18 @@ ls ~/ax-eval/conversations/
 | 역할 | 문서 작성 / 데이터 분석 / 소통 조율 / 업무 자동화 |
 | 데이터 | `~/.claude/projects/**/*.jsonl` 자동 분석 |
 
+**레벨 점수 범위** (종합 가중 평균 → 별점):
+
+| 점수 | 레벨 | 별점 |
+|------|------|------|
+| 1.0 이상 1.8 미만 | 1단계 입문 | ⭐ |
+| 1.8 이상 2.6 미만 | 2단계 활용 | ⭐⭐ |
+| 2.6 이상 3.4 미만 | 3단계 협업 | ⭐⭐⭐ |
+| 3.4 이상 4.2 미만 | 4단계 주도 | ⭐⭐⭐⭐ |
+| 4.2 이상 5.0 이하 | 5단계 전략 | ⭐⭐⭐⭐⭐ |
+
+**집계 방식**: 최대 20개 최신 세션, 각 축별 **중앙값(median)** 사용 (이상치 최소화). 세션 3개 미만이면 `DATA_INSUFFICIENT` 반환, 3~5개이면 최소 ⭐⭐ 보장.
+
 ---
 
 ## 파일 구조
@@ -83,7 +95,8 @@ ls ~/ax-eval/conversations/
 ```
 ax-eval/
 ├── CLAUDE.md                          ← 이 파일
-├── .claude-plugin/plugin.json         ← 플러그인 매니페스트
+├── .claude/settings.local.json        ← SessionStart compact 훅 + 로컬 permissions
+├── .claude-plugin/plugin.json         ← 플러그인 매니페스트 (훅 없음, 메타데이터만)
 ├── commands/ax-eval.md                ← 커맨드 라우터 (시작|체크|팁)
 ├── agents/ax-analyst.md               ← 4축 스코어링 서브에이전트
 ├── skills/
@@ -125,15 +138,58 @@ convert_sessions.py가 YAML frontmatter에 기록하는 AX 전용 지표:
 | `tool_error_count` | (참고) | 도구 오류 횟수 |
 | `strat_ratio` | 판단력 | 전략 키워드 비율 |
 | `thinking_turn_ratio` | 판단력 | 심층 사고 비율 |
+| `structure_ratio` | 요청력 | 구조화 요청 비율 (번호목록/섹션태그) |
+| `alt_request_ratio` | 판단력 | 대안/비교 탐색 비율 |
+| `correction_ratio` | 검증력 | 수정 요청 비율 |
+| `output_format_spec_ratio` | 요청력 | 출력 형식 명시 비율 |
+| `follow_up_ratio` | 검증력 | 후속 질문 비율 |
+| `claude_md_access` | 활용력/판단력 | CLAUDE.md 접근 여부 (0/1) |
+| `rules_used` | 판단력 | .claude/rules 파일 사용 여부 (0/1) |
+| `memory_used` | 활용력 | memory 파일 사용 여부 (0/1) |
+| `slash_cmd_ratio` | 활용력 | 슬래시 커맨드 사용 비율 |
+| `harness_count` | 활용력/판단력 | 하네스 신호 합계 (0~4), 보너스 점수 계산 기준 |
 
 **역할별 가중치** (`references/ax-maturity-model.md` 기준):
 
 | 역할 | 요청력 | 검증력 | 활용력 | 판단력 |
 |------|--------|--------|--------|--------|
-| 문서 작성 | 35% | 30% | 15% | 20% |
-| 데이터 분석 | 25% | 35% | 20% | 20% |
-| 소통 조율 | 35% | 25% | 15% | 25% |
-| 업무 자동화 | 25% | 25% | 35% | 15% |
+| UA마케터 | 35% | 25% | 25% | 15% |
+| CRM마케터 | 30% | 30% | 15% | 25% |
+| 디자이너 | 40% | 20% | 25% | 15% |
+| 데이터분석가 | 20% | 35% | 25% | 20% |
+| 개발자 | 20% | 30% | 35% | 15% |
+| 미선택 (기본) | 25% | 25% | 25% | 25% |
+
+---
+
+## Auto-Nudge 훅
+
+`SessionStart` / `SessionStop` 훅으로 자동 피드백 제공. **`plugin.json`에는 훅 없음** — 훅은 두 곳에 분리:
+
+| 훅 | 파일 | 위치 |
+|----|------|------|
+| SessionStart compact | `.claude/settings.local.json` | repo 내 |
+| SessionStart ax-nudge | `~/.claude/settings.json` + `~/.claude/scripts/ax-nudge.sh` | 글로벌 (repo 외부) |
+| SessionStop log-sync | `~/.claude/settings.json` + `~/.claude/scripts/ax-eval-log-sync.sh` | 글로벌 (repo 외부) |
+
+- **compact**: 컨텍스트 압축 시 플러그인 핵심 컨텍스트 요약 주입
+- **ax-nudge**: 약한 축을 systemMessage로 주입 (7일 쿨다운, assessment 없으면 스킵)
+- **log-sync**: 세션 종료 시 `convert_sessions.py` 백그라운드 실행
+- **Staleness**: assessment가 14일 이상 지났으면 세션 시작 시 `/ax-eval 체크` 권유
+
+훅 스크립트 수정 시: `~/.claude/scripts/ax-nudge.sh` / `ax-eval-log-sync.sh` (repo 외부, 별도 관리).
+
+---
+
+## 엣지 케이스 처리 (ax-analyst.md 기준)
+
+| 상황 | 처리 |
+|------|------|
+| 세션 1~2개 | `DATA_INSUFFICIENT` 반환, 점수 산출 안 함 |
+| 세션 3~5개 | 정상 산출, 최소 ⭐⭐ 보장 |
+| 한 축만 5점, 나머지 1~2점 | 실제 대화 1개 샘플링하여 교차 검증 |
+| profile.json 없음 | 균등 가중치(25%×4) 적용 |
+| frontmatter 값 누락 | 해당 지표 제외, 나머지로만 산출 |
 
 ---
 
@@ -151,6 +207,48 @@ convert_sessions.py가 YAML frontmatter에 기록하는 AX 전용 지표:
 - 비개발자가 이해 못할 용어를 레벨/팁에 사용
 
 ---
+
+## 배포 아키텍처
+
+### 플러그인 로딩 원리 (핵심)
+Claude Code는 `user-invocable: true`가 있는 스킬만 `/skillname`으로 호출 가능.
+`commands/` 디렉토리는 플러그인 캐시에서 로딩되지 않음 → **모든 진입점은 `skills/`에 위치해야 함**.
+
+### 플레이스홀더
+| 플레이스홀더 | 해결 값 |
+|---|---|
+| `{PLUGIN_SCRIPTS_DIR}` | 플러그인 캐시의 scripts/ 경로 |
+| `${CLAUDE_PLUGIN_ROOT}` | hooks.json에서 사용, 플러그인 루트 경로 |
+
+### 배포 경로 (팀 배포 시)
+```
+1. GitHub에 마켓플레이스 레포 생성 (예: pms0505-lgtm/biz-plugins)
+   └── .claude-plugin/marketplace.json  ← ax-eval 목록
+   └── plugins/ax-eval/                 ← 서브모듈 or 직접 복사
+
+2. 팀원 ~/.claude/settings.json에 추가:
+   "extraKnownMarketplaces": {
+     "biz-plugins": { "source": { "source": "github", "repo": "pms0505-lgtm/biz-plugins" }}
+   }
+
+3. 설치:
+   claude plugins install ax-eval@biz-plugins
+```
+
+### 로컬 개발 시 (현재)
+`~/.claude/skills/ax-eval*/` 에 수동 복사 후 사용.
+소스 변경 시 아래 명령으로 동기화 (`{PLUGIN_SCRIPTS_DIR}` → 실제 경로로 치환):
+```bash
+PROJ=~/Desktop/ax_eval
+DEST=~/.claude/skills
+cp $PROJ/skills/ax-eval/SKILL.md          $DEST/ax-eval/SKILL.md
+cp $PROJ/skills/ax-eval-tip/SKILL.md      $DEST/ax-eval-tip/SKILL.md
+# check/onboard는 {PLUGIN_SCRIPTS_DIR} 치환 필요
+sed 's|{PLUGIN_SCRIPTS_DIR}|'"$HOME"'/Desktop/ax_eval/scripts|g' \
+  $PROJ/skills/ax-eval-check/SKILL.md   > $DEST/ax-eval-check/SKILL.md
+sed 's|{PLUGIN_SCRIPTS_DIR}|'"$HOME"'/Desktop/ax_eval/scripts|g' \
+  $PROJ/skills/ax-eval-onboard/SKILL.md > $DEST/ax-eval-onboard/SKILL.md
+```
 
 ## 확장 포인트
 
