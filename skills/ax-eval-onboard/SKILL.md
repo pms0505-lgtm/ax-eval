@@ -48,27 +48,45 @@ mkdir -p ~/ax-eval/growth-log/weekly
 
 ### 3단계: 역할 선택
 
-AskUserQuestion으로 업무 역할을 묻습니다:
+**1단계:** AskUserQuestion으로 직군 계열을 묻습니다 (4개 옵션):
 
 ```
-어떤 업무를 주로 하시나요? (가중치 조정에 사용됩니다)
+어떤 직군에 해당하시나요? (AX 레벨 평가 가중치 조정에 사용됩니다)
 
-1. 문서 작성 — 보고서, 기획서, 제안서 작성
-2. 데이터 분석 — 데이터 정리, 분석, 시각화
-3. 소통 조율 — 회의록, 이메일, 커뮤니케이션
-4. 업무 자동화 — 반복 업무 효율화, 프로세스 개선
+1. 마케터 — UA마케터 또는 CRM마케터
+2. 디자이너 — 브랜드/UI 디자인, 크리에이티브 작업
+3. 데이터분석가 — 데이터 정리, 지표 분석, 리포트
+4. 개발자 — 기능 개발, 코드 리뷰, 자동화 스크립트
 ```
+
+**2단계 (마케터 선택 시에만):** AskUserQuestion으로 세부 직군을 묻습니다:
+
+```
+마케터 세부 직군을 선택해주세요:
+
+1. UA마케터 — 광고 집행, 캠페인 기획, 소재 제작
+2. CRM마케터 — 고객 세그먼트, 리텐션 메시지, 자동화
+```
+
+디자이너/데이터분석가/개발자 선택 시 2단계 건너뜀.
 
 선택 후 `~/ax-eval/config/profile.json`에 저장:
 
 ```json
 {
-  "role": "문서 작성",
-  "role_key": "document-drafter",
+  "role": "UA마케터",
+  "role_key": "ua-marketer",
   "created_at": "YYYY-MM-DD",
   "name": ""
 }
 ```
+
+role_key 매핑:
+- UA마케터 → `ua-marketer`
+- CRM마케터 → `crm-marketer`
+- 디자이너 → `designer`
+- 데이터분석가 → `data-analyst`
+- 개발자 → `developer`
 
 ---
 
@@ -99,7 +117,7 @@ ls ~/.claude/projects/
 플러그인의 `scripts/convert_sessions.py`를 실행합니다:
 
 ```bash
-python3 ~/.claude/plugins/*/ax-eval/scripts/convert_sessions.py \
+python3 {PLUGIN_SCRIPTS_DIR}/convert_sessions.py \
   --output-dir ~/ax-eval/conversations \
   --names-file ~/ax-eval/config/project_names.json
 ```

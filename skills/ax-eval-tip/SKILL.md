@@ -4,6 +4,8 @@ description: "AX 레벨별 맞춤 활용 팁. 현재 레벨을 읽어 업무 맥
 allowed-tools:
   - Read
   - Glob
+  - WebSearch
+  - WebFetch
 ---
 
 # ax-eval-tip: 맞춤 활용 팁
@@ -13,6 +15,18 @@ allowed-tools:
 ---
 
 ## 실행 순서
+
+### 0단계: 최신 Anthropic 팁 수집
+
+다음 쿼리로 웹서치하여 현재 레벨에 맞는 Claude/Claude Code 최신 활용법을 수집합니다:
+
+```
+"site:docs.anthropic.com claude prompt engineering best practices"
+"anthropic claude code tips features 2025"
+```
+
+검색 결과에서 실용적인 팁 1~2개를 추출하여 메모합니다.
+검색 실패 시 이 단계를 건너뜁니다.
 
 ### 1단계: 현재 레벨 파악
 
@@ -214,6 +228,9 @@ AI 활용 노하우를 팀원과 공유하는 문서를 만들어보세요.
 
 [이번 주 목표]
 {목표}
+
+[최신 Anthropic 팁]
+{0단계 WebSearch에서 수집한 팁 1~2개. 출처 URL 포함. 수집 실패 시 이 섹션 생략}
 
 ━━━
 🎯 가장 올리면 좋은 축: {WEAKEST_AXIS}
