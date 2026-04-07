@@ -48,7 +48,19 @@
       "Bash(ls ~/.claude/settings*)",
       "Bash(xargs -I {} wc -l {})",
       "WebSearch",
-      "Skill(codex:rescue)"
+      "Skill(codex:rescue)",
+      "Read(//c/Users/DG-2501-PN-001/biz-plugins/**)",
+      "Bash(mkdir -p .claude-plugin plugins/ax-eval)",
+      "Bash(rsync -av '~/Desktop/ax_eval/' plugins/ax-eval/ --exclude=.git --exclude=handoff.md --exclude=.claude/settings.local.json --exclude=.claude/commands/ --exclude=.claude/skills/ --exclude=__pycache__/ '--exclude=*.pyc')",
+      "Bash(cp -r ~/Desktop/ax_eval/. plugins/ax-eval/)",
+      "Bash(rm -rf plugins/ax-eval/.git)",
+      "Bash(rm -f plugins/ax-eval/handoff.md)",
+      "Bash(rm -f plugins/ax-eval/.claude/settings.local.json)",
+      "Bash(rm -rf plugins/ax-eval/__pycache__)",
+      "Bash(gh api:*)",
+      "Read(//c/Users/DG-2501-PN-001/.claude/skills/**)",
+      "Bash(git -C ~/Desktop/ax_eval remote -v)",
+      "Bash(git -C ~/Desktop/ax_eval status)"
     ]
   },
   "hooks": {

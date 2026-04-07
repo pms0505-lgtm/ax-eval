@@ -7,9 +7,10 @@
 | 항목 | 내용 |
 |------|------|
 | 버전 | v1.3.0 |
-| 상태 | 스코어링 로직 대규모 개선 완료, 팀 내 배포 준비 완료 |
+| 상태 | biz-plugins 마켓플레이스 배포 완료, E2E 테스트 1개 잔여 |
 | 리포 | https://github.com/pms0505-lgtm/ax-eval |
-| 다음 단계 | GitHub 마켓플레이스 레포(`pms0505-lgtm/biz-plugins`) 생성 → 팀 배포 |
+| 마켓플레이스 | https://github.com/pms0505-lgtm/biz-plugins |
+| 다음 단계 | Claude Code 재시작 후 E2E 테스트 (`/ax-eval` → `체크` → `팁`) |
 
 ## 프로젝트 개요
 
@@ -96,6 +97,8 @@ ax-eval/
 
 | 날짜 | 버전 | 내용 |
 |------|------|------|
+| 2026-04-07 | v1.3.0 | CLAUDE.md 3건 수정 (스코어링 stale 정보 정정, skills/ vs .claude/skills/ 구분 명시, plugin v1.2.0 버전 표시) + ~/.claude/skills/ 수동 복사본 4개 삭제 (플러그인 중복 제거) |
+| 2026-04-07 | v1.3.0 | biz-plugins 마켓플레이스 배포 완료 — marketplace.json 포맷 수정(path→source, 메타 추가), `/plugin marketplace add` 방식 확정, settings.json trailing comma 버그 수정, ax-eval@biz-plugins 설치 검증 |
 | 2026-04-07 | v1.3.0 | Opus 딥리서치 기반 스코어링 개선 — 버그 3건 수정(역할 체계 불일치, 확인 오탐, specificity 과대), 개선 4건(follow_up 통합, avg_len 200, 활용력 5점 완화, 최소보장 제거), 하네스 엔지니어링 신호 5개 추가, .gitignore 갱신 |
 | 2026-04-07 | v1.2.0 | `enabledPlugins`에 `ax-eval@local` 등록 (Unknown skill 해결), CLAUDE.md에 레벨 점수 범위/집계 방식/Auto-Nudge 훅/엣지 케이스 섹션 추가 |
 | 2026-04-07 | v1.2.0 | git init + GitHub push (pms0505-lgtm/ax-eval), plugin.json 스키마 수정, 로컬 플러그인 등록 (~/.claude/plugins/cache/local/ax-eval/1.2.0), CLAUDE.md 개발 명령어 버그 수정 |
@@ -134,10 +137,10 @@ ax-eval/
 
 ## 다음 세션 TODO (우선순위 순)
 
-1. [ ] **팀 배포**: `pms0505-lgtm/biz-plugins` GitHub 마켓플레이스 레포 생성 → ax-eval 등록 → 팀원 설치 테스트 ← 최우선
-2. [ ] GitHub push (현재 로컬 커밋 5개 미push 상태)
-3. [ ] E2E 실테스트: `/ax-eval 시작` → `체크` → `팁` 전체 플로우 확인
-4. [ ] ax-eval-log-sync.sh Stop 훅 실환경 검증
+1. [ ] **E2E 테스트**: Claude Code 재시작 후 `/ax-eval` → `/ax-eval 체크` → `/ax-eval 팁` 순서 확인 ← 최우선 (중복 스킬 제거 후 첫 실행)
+2. [ ] ax-eval-log-sync.sh Stop 훅 실환경 검증
+3. [x] ~~팀 배포: biz-plugins 마켓플레이스 레포 생성 + ax-eval 등록~~ (완료 — `/plugin marketplace add` 방식)
+4. [x] ~~GitHub push~~ (완료: pms0505-lgtm/ax-eval master)
 5. [x] ~~스코어링 로직 Opus 딥리서치 기반 개선~~ (완료 — v1.3.0)
 6. [x] ~~하네스 엔지니어링 신호 추가~~ (완료)
 7. [x] ~~enabledPlugins에 ax-eval@local 등록~~ (완료)
