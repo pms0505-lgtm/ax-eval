@@ -6,9 +6,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| 버전 | v1.2.0 |
-| 상태 | 미게시 (로컬 개발 완료, git 미초기화) |
-| 다음 단계 | git init → GitHub 리포 생성 → 플러그인 마켓플레이스 등록 |
+| 버전 | v1.3.0 |
+| 상태 | 스코어링 로직 대규모 개선 완료, 팀 내 배포 준비 완료 |
+| 리포 | https://github.com/pms0505-lgtm/ax-eval |
+| 다음 단계 | GitHub 마켓플레이스 레포(`pms0505-lgtm/biz-plugins`) 생성 → 팀 배포 |
 
 ## 프로젝트 개요
 
@@ -54,22 +55,28 @@ ax-eval/
 ## 스코어링 로직 (ax-analyst.md 참조)
 
 ### 지표 추출 (convert_sessions.py)
-- `avg_user_msg_len` + `specific_context_ratio` → 요청력
-- `verify_ratio` → 검증력
-- `tool_diversity` + `orch_tool_count` → 활용력
-- `strat_ratio` + `thinking_turn_ratio` → 판단력
+- **요청력**: `min(avg_len/200,1.0)*0.2 + specific_ratio*0.5 + structure_ratio*0.3`
+- **검증력**: `verify_ratio*0.5 + correction_ratio*0.3 + follow_up_ratio*0.2`
+- **활용력**: tool_diversity + orch_tool_count 조건 + harness_count 보너스(+0.5~1.0)
+- **판단력**: `strat_ratio*0.6 + alt_request_ratio*0.2 + thinking_turn_ratio*0.2` + harness 보너스(+0.3)
+
+### 하네스 엔지니어링 신호 (신규)
+- `claude_md_access` / `rules_used` / `memory_used` / `slash_cmd_ratio` → `harness_count(0~4)`
+- tool_use input.file_path에서 자동 탐지
 
 ### 레벨 판정
-- 각 축 1~5점 → 역할별 가중 평균 → ⭐(1.0~1.7) ~ ⭐⭐⭐⭐⭐(4.2~5.0)
-- 세션 3개 이상 시 최소 ⭐⭐ 보장
+- 각 축 1~5점 → 역할별 가중 평균 → ⭐(1.0~1.8미만) ~ ⭐⭐⭐⭐⭐(4.2~5.0)
+- 세션 3~5개: 최소 보장 없이 실제 점수 + `(데이터 부족)` 주석 표시
 
-### 역할별 가중치
+### 역할별 가중치 (5개 직군)
 | 역할 | 요청력 | 검증력 | 활용력 | 판단력 |
 |------|--------|--------|--------|--------|
-| 문서 작성 | 35% | 30% | 15% | 20% |
-| 데이터 분석 | 25% | 35% | 20% | 20% |
-| 소통 조율 | 35% | 25% | 15% | 25% |
-| 업무 자동화 | 25% | 25% | 35% | 15% |
+| UA마케터 | 35% | 25% | 25% | 15% |
+| CRM마케터 | 30% | 30% | 15% | 25% |
+| 디자이너 | 40% | 20% | 25% | 15% |
+| 데이터분석가 | 20% | 35% | 25% | 20% |
+| 개발자 | 20% | 30% | 35% | 15% |
+| 미선택 | 25% | 25% | 25% | 25% |
 
 ## 사용자 데이터 경로
 
@@ -89,6 +96,9 @@ ax-eval/
 
 | 날짜 | 버전 | 내용 |
 |------|------|------|
+| 2026-04-07 | v1.3.0 | Opus 딥리서치 기반 스코어링 개선 — 버그 3건 수정(역할 체계 불일치, 확인 오탐, specificity 과대), 개선 4건(follow_up 통합, avg_len 200, 활용력 5점 완화, 최소보장 제거), 하네스 엔지니어링 신호 5개 추가, .gitignore 갱신 |
+| 2026-04-07 | v1.2.0 | `enabledPlugins`에 `ax-eval@local` 등록 (Unknown skill 해결), CLAUDE.md에 레벨 점수 범위/집계 방식/Auto-Nudge 훅/엣지 케이스 섹션 추가 |
+| 2026-04-07 | v1.2.0 | git init + GitHub push (pms0505-lgtm/ax-eval), plugin.json 스키마 수정, 로컬 플러그인 등록 (~/.claude/plugins/cache/local/ax-eval/1.2.0), CLAUDE.md 개발 명령어 버그 수정 |
 | 2026-04-07 | v1.2.0 | 하네스 엔지니어링 — ax-analyst 자기검증 체크리스트, 행동 앵커, 엣지케이스 규칙, 중앙값 집계, 구조 점검 버그 4건 수정 |
 | 2026-04-07 | v1.1.0 | Auto-Nudge — SessionStart/Stop 훅으로 약한 축 자동 피드백 추가 |
 | 2026-04-07 | v1.0.1 | CLAUDE.md 개선 — /init 헤더, 개발 명령어, 실행 흐름 다이어그램 추가 |
@@ -124,9 +134,11 @@ ax-eval/
 
 ## 다음 세션 TODO (우선순위 순)
 
-1. [ ] **git init + .gitignore + 첫 커밋** ← 최우선 (작업물 유실 방지)
-2. [ ] **E2E 실테스트**: `/ax-eval 시작` → `체크` → `팁` 전체 플로우
-3. [ ] ax-eval-log-sync.sh Stop 훅 실환경 검증
-4. [ ] GitHub 리포 생성 + push
-5. [ ] gptaku-plugins 마켓플레이스 등록 절차 확인
-6. [ ] 로컬 플러그인 설치 테스트 (`claude plugins install . --local`)
+1. [ ] **팀 배포**: `pms0505-lgtm/biz-plugins` GitHub 마켓플레이스 레포 생성 → ax-eval 등록 → 팀원 설치 테스트 ← 최우선
+2. [ ] GitHub push (현재 로컬 커밋 5개 미push 상태)
+3. [ ] E2E 실테스트: `/ax-eval 시작` → `체크` → `팁` 전체 플로우 확인
+4. [ ] ax-eval-log-sync.sh Stop 훅 실환경 검증
+5. [x] ~~스코어링 로직 Opus 딥리서치 기반 개선~~ (완료 — v1.3.0)
+6. [x] ~~하네스 엔지니어링 신호 추가~~ (완료)
+7. [x] ~~enabledPlugins에 ax-eval@local 등록~~ (완료)
+8. [x] ~~git init + GitHub push~~ (완료: pms0505-lgtm/ax-eval)
