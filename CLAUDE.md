@@ -33,13 +33,24 @@ ls ~/ax-eval/conversations/
 > **증분 변환**: JSONL 파일 수정 시각이 기존 MD보다 최신일 때만 재변환.
 > **프로젝트 이름 매핑**: `~/ax-eval/config/project_names.json`에 `{"디렉토리명": "표시명"}` 형식으로 저장.
 
+### SKILL.md 변경 후 검증 워크플로우
+
+```bash
+# 1. 스킬 캐시에 동기화 (아래 배포 아키텍처 섹션의 sync 명령 실행)
+# 2. Claude Code 재시작 (훅/스킬 캐시 갱신)
+# 3. E2E 테스트 순서
+/ax-eval 시작   # 역할 선택 플로우 확인
+/ax-eval 체크   # 로그 변환 → 분석 → 출력 형식 확인
+/ax-eval 팁     # 레벨별 팁 출력 확인
+```
+
 ---
 
 ## 실행 흐름 (컴포넌트 간 연결)
 
 ```
 사용자: /ax-eval 체크
-    └→ commands/ax-eval.md (라우터)
+    └→ skills/ax-eval/SKILL.md (메인 라우터, user-invocable: true)
         └→ skills/ax-eval-check/SKILL.md
             ├→ scripts/convert_sessions.py  (최신 로그 변환)
             └→ agents/ax-analyst.md         (4축 스코어 계산)
@@ -70,7 +81,7 @@ ls ~/ax-eval/conversations/
 |------|------|
 | 측정 축 | 요청력 / 검증력 / 활용력 / 판단력 |
 | 레벨 | ⭐(입문) ~ ⭐⭐⭐⭐⭐(전략) |
-| 역할 | 문서 작성 / 데이터 분석 / 소통 조율 / 업무 자동화 |
+| 역할 | UA마케터 / CRM마케터 / 디자이너 / 데이터분석가 / 개발자 / 미선택 |
 | 데이터 | `~/.claude/projects/**/*.jsonl` 자동 분석 |
 
 **레벨 점수 범위** (종합 가중 평균 → 별점):
@@ -96,13 +107,14 @@ ls ~/ax-eval/conversations/
 ax-eval/
 ├── CLAUDE.md                          ← 이 파일
 ├── .claude/settings.local.json        ← SessionStart compact 훅 + 로컬 permissions
-├── .claude-plugin/plugin.json         ← 플러그인 매니페스트 v1.2.0 (메타데이터만)
-├── hooks/hooks.json                   ← 플러그인 번들 훅 정의 (SessionStart/SessionStop)
+├── .claude-plugin/plugin.json         ← 플러그인 매니페스트 v1.3.0 (메타데이터만)
+├── hooks/hooks.json                   ← 플러그인 번들 훅 정의 (SessionStart/SessionEnd)
 ├── .claude/commands/ax-eval.md        ← 로컬 캐시된 커맨드 라우터
 ├── .claude/skills/                    ← 로컬 실행 캐시 (소스 sync 후 반영)
 ├── commands/ax-eval.md                ← 커맨드 라우터 소스 (시작|체크|팁)
-├── agents/ax-analyst.md               ← 4축 스코어링 서브에이전트
+├── agents/ax-analyst.md               ← 4축 스코어링 서브에이전트 (스코어링 공식 포함)
 ├── skills/                            ← 소스 원본 (수정은 여기서)
+│   ├── ax-eval/SKILL.md              ← 메인 라우터 스킬 (user-invocable: true, 인자 → 서브스킬 위임)
 │   ├── ax-eval-onboard/SKILL.md      ← 초기 설정 플로우
 │   ├── ax-eval-check/SKILL.md        ← 레벨 체크 + 출력 ({PLUGIN_SCRIPTS_DIR} 플레이스홀더 포함)
 │   └── ax-eval-tip/SKILL.md          ← 레벨별 맞춤 팁
@@ -134,13 +146,13 @@ ax-eval/
 
 ## Auto-Nudge 훅
 
-`SessionStart` / `SessionStop` 훅으로 자동 피드백 제공. 훅은 세 곳에 분리:
+`SessionStart` / `SessionEnd` 훅으로 자동 피드백 제공. 훅은 세 곳에 분리:
 
 | 훅 | 파일 | 위치 |
 |----|------|------|
 | SessionStart compact | `.claude/settings.local.json` | repo 내 |
 | SessionStart ax-nudge + 요청 코치 | `hooks/hooks.json` | repo 내 (플러그인 번들) |
-| SessionStop log-sync | `hooks/hooks.json` | repo 내 (플러그인 번들) |
+| SessionEnd log-sync | `hooks/hooks.json` | repo 내 (플러그인 번들) |
 
 - **compact**: 컨텍스트 압축 시 플러그인 핵심 컨텍스트 요약 주입
 - **ax-nudge**: 최근 assessment의 약한 축을 systemMessage로 주입 (7일 쿨다운, assessment 없으면 스킵)
@@ -163,6 +175,13 @@ ax-eval/
 - `~/ax-eval/` 사용자 데이터 직접 수정
 - 원본 JSONL 로그 수정
 - 비개발자가 이해 못할 용어를 레벨/팁에 사용
+- README/슬랙 소개 글에 검증 안 된 CLI 명령어 기재 (반드시 실제 실행 후 확인)
+
+### 배포 경로 변경 시 필수 동기화 대상
+배포 repo/marketplace 변경 → 아래 3곳 동시 업데이트:
+1. `README.md` 설치 절차
+2. `drafts/slack-intro.md` 설치 섹션
+3. `CLAUDE.md` 배포 경로 섹션
 
 ---
 
@@ -184,14 +203,12 @@ Claude Code는 `user-invocable: true`가 있는 스킬만 `/skillname`으로 호
    └── .claude-plugin/marketplace.json  ← ax-eval 목록
    └── plugins/ax-eval/                 ← 서브모듈 or 직접 복사
 
-2. 팀원 ~/.claude/settings.json에 추가:
-   "extraKnownMarketplaces": {
-     "biz-plugins": { "source": { "source": "github", "repo": "pms0505-lgtm/biz-plugins" }}
-   }
-
-3. 설치:
+2. 팀원 설치 (Claude Code 터미널):
+   claude plugins marketplace add pms0505-lgtm/biz-plugins
    claude plugins install ax-eval@biz-plugins
 ```
+
+> **주의**: `claude plugins marketplace add` 의 source 형식은 `owner/repo`, `https://...`, `./path` 만 허용. `github:` 접두사 불가.
 
 ### 로컬 개발 시 (현재)
 `~/.claude/skills/ax-eval*/` 에 수동 복사 후 사용.
@@ -207,6 +224,17 @@ sed 's|{PLUGIN_SCRIPTS_DIR}|'"$HOME"'/Desktop/ax_eval/scripts|g' \
 sed 's|{PLUGIN_SCRIPTS_DIR}|'"$HOME"'/Desktop/ax_eval/scripts|g' \
   $PROJ/skills/ax-eval-onboard/SKILL.md > $DEST/ax-eval-onboard/SKILL.md
 ```
+
+## 주의사항 (함정 방지)
+
+| 항목 | 내용 |
+|------|------|
+| 스킬 변경 적용 | `skills/` 수정 후 반드시 `.claude/skills/` 캐시 sync + Claude Code 재시작해야 반영됨 |
+| 세션 3~5개 최소 보장 없음 | ax-analyst의 엣지케이스에 "최소 ⭐⭐ 보장" 구문이 있었으나 v1.3.0에서 제거됨. 실제 점수 그대로 출력 |
+| SessionStop → SessionEnd | 훅 이벤트명이 변경됨. hooks.json 수정 시 `SessionEnd` 사용 (구 `SessionStop` 아님) |
+| `.claude/commands/` 로딩 안 됨 | 플러그인은 `skills/` 기반으로만 진입점 노출. `commands/`는 캐시로 로딩되지 않음 |
+
+---
 
 ## 확장 포인트
 
