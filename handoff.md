@@ -6,11 +6,11 @@
 
 | 항목 | 내용 |
 |------|------|
-| 버전 | v1.3.0 |
-| 상태 | E2E 검증 완료 (체크 + 팁 정상) — 훅 실환경 검증만 잔존 |
+| 버전 | v1.4.0 |
+| 상태 | v1.4.0 배포 완료 + 설치 가이드 "재시작 안내" 추가 (README, slack-intro) |
 | 리포 | https://github.com/pms0505-lgtm/ax-eval |
 | 마켓플레이스 | https://github.com/pms0505-lgtm/biz-plugins |
-| 다음 단계 | 새 세션 시작 후 SessionStart/SessionEnd 훅 자동 동작 확인 (ax-nudge 7일 쿨다운 해제 후) |
+| 다음 단계 | ① 슬랙 배포 후 팀원 설치 검증 ② 역할별 팁 E2E 검증 (UA마케터/CRM 역할 전환 후 `/ax-eval 팁` 확인) |
 
 ## 프로젝트 개요
 
@@ -98,6 +98,8 @@ ax-eval/
 
 | 날짜 | 버전 | 내용 |
 |------|------|------|
+| 2026-04-09 | v1.4.0 | 설치 가이드 개선 — README.md에 재시작 경고 박스 + "Unknown skill" FAQ 추가, drafts/slack-intro.md에 재시작 안내 1줄 추가. 팀원 배포용 슬랙 글 작성 완료 |
+| 2026-04-09 | v1.4.0 | 역할별 맞춤 팁 팀 배포 — `skills/ax-eval-tip/SKILL.md` + `agents/ax-analyst.md` + `references/tips-by-level.md` biz-plugins v1.4.0으로 bump + GitHub push 완료. `/ax-eval 체크` 실행 결과: 종합 4.15점(⭐⭐⭐⭐ 주도, +0.70 상승). |
 | 2026-04-09 | v1.3.0 | gstack(YC CEO Garry Tan) 비교 분석 — 카테고리 다름(생산성 vs 측정), 역할별 맞춤 팁 1순위 구현: `skills/ax-eval-tip/SKILL.md`에 5개 역할 × 4단계 전환 팁 + 약한 축 역할별 처방 추가. `references/tips-by-level.md` 동기화. 실행 흐름 다이어그램 오류 수정(commands/ → skills/ax-eval/SKILL.md). |
 | 2026-04-08 | v1.3.0 | README/슬랙 소개 글 설치 명령어 수정 (`DG-BusinessMgmt` 플레이스홀더 → `pms0505-lgtm/biz-plugins`, `github:` 접두사 오류 수정). CLAUDE.md 배포 경로 CLI 형식 수정 + 재발방지 규칙 추가 (검증 안 된 명령어 기재 금지, 배포 경로 변경 시 3곳 동기화) |
 | 2026-04-08 | v1.3.0 | 훅 중복 제거 — `~/.claude/settings.json`에서 ax-nudge/요청코치/log-sync 3개 제거, 플러그인 `hooks/hooks.json`으로 단일화. README에 요청 코치 섹션 + 시나리오 추가. 슬랙 소개 글에 요청 코치 시나리오 + 전 프로젝트 자동 작동 안내 추가 |
@@ -149,6 +151,6 @@ ax-eval/
 2. [ ] **훅 동작 확인**: SessionStart ax-nudge + 요청 코치, SessionEnd log-sync 정상 작동 여부 (ax-nudge는 7일 쿨다운으로 재현 어려움 — 직접 bash 실행으로 대체 검증 가능)
 3. [x] ~~ax-eval-log-sync.sh SessionEnd 훅 실환경 검증~~ (완료)
 4. [x] ~~팀 배포: biz-plugins 마켓플레이스 레포 생성 + ax-eval 등록~~ (완료)
-5. [ ] **역할별 팁 E2E 검증**: `/ax-eval 팁` 실행 후 UA마케터/CRM마케터 등 역할별 Before→After 출력 확인
+5. [ ] **역할별 팁 E2E 검증**: `/ax-eval 팁` 실행 후 UA마케터/CRM마케터 등 역할별 Before→After 출력 확인 (v1.4.0 배포 완료, 다른 역할 전환 후 검증 필요)
 6. [ ] **2순위 구현**: 정체 streak 감지 (`agents/ax-analyst.md` + `skills/ax-eval-check/SKILL.md`)
 7. [ ] **3순위 구현**: 팁 실천 추적 (assessment.json 스키마 + ax-analyst.md 수정)
