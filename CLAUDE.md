@@ -96,8 +96,29 @@ ls ~/ax-eval/conversations/
 
 **집계 방식**: 최대 20개 최신 세션, 각 축별 **중앙값(median)** 사용. 세션 3개 미만이면 `DATA_INSUFFICIENT` 반환, 3~5개이면 실제 점수 그대로 출력 (출력에 `데이터 부족` 주석 추가).
 
-> 상세 스코어링 공식, 역할별 가중치, 엣지 케이스 판단 → `agents/ax-analyst.md` 참조.
-> 4축 × 5레벨 정의 (정성 기준) → `references/ax-maturity-model.md` 참조.
+**스코어링 공식 요약** (상세는 `agents/ax-analyst.md` 참조):
+
+| 축 | 공식 |
+|----|------|
+| 요청력 | `min(avg_len/200,1.0)*0.2 + specific_ratio*0.5 + structure_ratio*0.3` (+0.1 보너스: output_format_spec_ratio > 0.3) |
+| 검증력 | `verify_ratio*0.5 + correction_ratio*0.3 + follow_up_ratio*0.2` |
+| 활용력 | tool_diversity 조건표 기반 + harness_count 보너스 (≥2: +0.5, ≥5: +1.0) |
+| 판단력 | `strat_ratio*0.6 + alt_request_ratio*0.2 + thinking_turn_ratio*0.2` + harness 보너스 (+0.3, claude_md OR rules 사용 시) |
+
+**하네스 엔지니어링 신호** (`harness_count` 0~7, v1.5.0):
+
+| Tier | 신호 키 | convert_sessions.py 탐지 방법 |
+|------|---------|-------------------------------|
+| 1 | `claude_md_access` | tool Read/Write로 CLAUDE.md 접근 |
+| 1 | `memory_used` | memory/ 경로 파일 접근 |
+| 1 | `slash_cmd_ratio` | Skill 도구 호출 비율 |
+| 2 | `plan_mode_used` | EnterPlanMode/ExitPlanMode 사용 |
+| 2 | `orch_tool_count` | Agent/Task 오케스트레이션 도구 수 (**harness_count 합산 제외** — 활용력 점수에서 직접 사용) |
+| 2 | `custom_skill_used` | Skill 도구 사용 여부 |
+| 3 | `rules_used` | .claude/rules/ 경로 파일 접근 |
+| 3 | `mcp_used` | mcp__* 도구 사용 여부 |
+
+> 4축 × 5레벨 정성 기준 → `references/ax-maturity-model.md` 참조.
 
 ---
 
@@ -107,7 +128,7 @@ ls ~/ax-eval/conversations/
 ax-eval/
 ├── CLAUDE.md                          ← 이 파일
 ├── .claude/settings.local.json        ← SessionStart compact 훅 + 로컬 permissions
-├── .claude-plugin/plugin.json         ← 플러그인 매니페스트 v1.3.0 (메타데이터만)
+├── .claude-plugin/plugin.json         ← 플러그인 매니페스트 (메타데이터만 — 배포 전 버전 bump 필요)
 ├── hooks/hooks.json                   ← 플러그인 번들 훅 정의 (SessionStart/SessionEnd)
 ├── .claude/commands/ax-eval.md        ← 로컬 캐시된 커맨드 라우터
 ├── .claude/skills/                    ← 로컬 실행 캐시 (소스 sync 후 반영)
@@ -225,12 +246,25 @@ sed 's|{PLUGIN_SCRIPTS_DIR}|'"$HOME"'/Desktop/ax_eval/scripts|g' \
   $PROJ/skills/ax-eval-onboard/SKILL.md > $DEST/ax-eval-onboard/SKILL.md
 ```
 
+**팀 배포 시 추가 단계** (biz-plugins 마켓플레이스 레포 동기화):
+```bash
+# ax-eval 소스를 biz-plugins/plugins/ax-eval/ 로 복사 후 push
+BIZ=~/Desktop/biz-plugins/plugins/ax-eval
+cp -r $PROJ/skills $BIZ/
+cp -r $PROJ/agents $BIZ/
+cp -r $PROJ/references $BIZ/
+cp -r $PROJ/scripts $BIZ/
+cp -r $PROJ/hooks $BIZ/
+cp $PROJ/.claude-plugin/plugin.json $BIZ/.claude-plugin/plugin.json
+# 버전 bump 후 git push
+```
+
 ## 주의사항 (함정 방지)
 
 | 항목 | 내용 |
 |------|------|
 | 스킬 변경 적용 | `skills/` 수정 후 반드시 `.claude/skills/` 캐시 sync + Claude Code 재시작해야 반영됨 |
-| 세션 3~5개 최소 보장 없음 | ax-analyst의 엣지케이스에 "최소 ⭐⭐ 보장" 구문이 있었으나 v1.3.0에서 제거됨. 실제 점수 그대로 출력 |
+| 세션 3~5개 최소 보장 없음 | ax-analyst의 "최소 ⭐⭐ 보장" 구문은 제거됨. 실제 점수 그대로 출력 |
 | SessionStop → SessionEnd | 훅 이벤트명이 변경됨. hooks.json 수정 시 `SessionEnd` 사용 (구 `SessionStop` 아님) |
 | `.claude/commands/` 로딩 안 됨 | 플러그인은 `skills/` 기반으로만 진입점 노출. `commands/`는 캐시로 로딩되지 않음 |
 
